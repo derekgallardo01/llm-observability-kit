@@ -39,6 +39,14 @@ docker run --rm llm-obs pytest -q                      # tests
 docker run --rm -v $(pwd):/work llm-obs llm-obs aggregate /work/traces.jsonl
 ```
 
+## Example: production scenario
+
+**[examples/slack_alerter.py](examples/slack_alerter.py)** — Scheduled alert-to-Slack pipeline: aggregate traces -> check rules -> POST fired alerts to a Slack webhook. Drop into a 15-min cron for production alerting
+
+```bash
+python examples/slack_alerter.py
+```
+
 ## What it's for
 
 Three categories of LLM-call observability questions every production
