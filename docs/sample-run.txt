@@ -1,0 +1,59 @@
+Demo: bundled production-1hour.jsonl (I:\Projects\upwork\standalone\llm-observability-kit\fixtures\production-1hour.jsonl)
+
+
+Aggregate over 646 traces:
+  Total cost:    $4.4549
+  Total errors:  5
+
+  Per feature:
+    customer_complaint_classifier        count= 503  errors= 5  p95=  542ms  cost=$0.0297
+    policy_summarizer                    count= 115  errors= 0  p95= 1853ms  cost=$0.7892
+    research_agent                       count=  28  errors= 0  p95= 5240ms  cost=$3.6360
+
+  Per model:
+    claude-haiku-4-5                count= 503  cost=$0.0297
+    claude-opus-4-7                 count=  28  cost=$3.6360
+    claude-sonnet-4-6               count= 115  cost=$0.7892
+
+  Per tenant:
+    acme                  count= 437  cost=$4.0096
+    globex                count= 209  cost=$0.4453
+
+============================================================
+
+Sliding-window stats:
+
+Time-bucketed stats (10-minute windows):
+
+  window_start                  feature                              count   p95ms  errors      cost
+  2026-06-28T09:00:04.787000Z   customer_complaint_classifier           83     532       3  $ 0.0047
+  2026-06-28T09:00:04.787000Z   policy_summarizer                       13    1609       0  $ 0.0894
+  2026-06-28T09:00:04.787000Z   research_agent                           3    2877       0  $ 0.4035
+  2026-06-28T09:10:04.787000Z   customer_complaint_classifier           85     549       0  $ 0.0050
+  2026-06-28T09:10:04.787000Z   policy_summarizer                       22    1613       0  $ 0.1501
+  2026-06-28T09:10:04.787000Z   research_agent                           2    1120       0  $ 0.2472
+  2026-06-28T09:20:04.787000Z   customer_complaint_classifier           89     503       1  $ 0.0053
+  2026-06-28T09:20:04.787000Z   policy_summarizer                       20    1862       0  $ 0.1377
+  2026-06-28T09:20:04.787000Z   research_agent                           5    4311       0  $ 0.6542
+  2026-06-28T09:30:04.787000Z   customer_complaint_classifier           92     509       1  $ 0.0055
+  2026-06-28T09:30:04.787000Z   policy_summarizer                       17    1823       0  $ 0.1154
+  2026-06-28T09:30:04.787000Z   research_agent                           6    3515       0  $ 0.7740
+  2026-06-28T09:40:04.787000Z   customer_complaint_classifier           73     532       0  $ 0.0043
+  2026-06-28T09:40:04.787000Z   policy_summarizer                       21    1652       0  $ 0.1408
+  2026-06-28T09:40:04.787000Z   research_agent                           6    5292       0  $ 0.7905
+  2026-06-28T09:50:04.787000Z   customer_complaint_classifier           81     539       0  $ 0.0049
+  2026-06-28T09:50:04.787000Z   policy_summarizer                       22    1588       0  $ 0.1558
+  2026-06-28T09:50:04.787000Z   research_agent                           6    4522       0  $ 0.7665
+
+============================================================
+
+Alert evaluation against default rules:
+
+Checked 4 rules; 1 fired:
+
+  ALERT: opus_cost_spike
+    Opus model usage exceeded $2 in window - check whether Sonnet/Haiku would work.
+    metric:   model_cost_usd
+    actual:   3.6360
+    threshold: > 2.0000
+    scope:    {'model': 'claude-opus-4-7'}

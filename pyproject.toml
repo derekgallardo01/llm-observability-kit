@@ -1,0 +1,27 @@
+[project]
+name = "llm-observability"
+version = "1.0.0"
+description = "Runtime observability for LLM calls: capture every call as a Trace (prompt hash + model + latency + tokens + cost + error), aggregate over sliding windows (p50/p95/p99 + cost/hour + error rate), fire alerts when thresholds breach. Vendor-neutral — works with Claude, OpenAI, Azure OpenAI, or any HTTP-callable model."
+authors = [{name = "Derek Gallardo", email = "derekgallardo01@gmail.com"}]
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+http = [
+    "httpx>=0.27.0",
+]
+
+[project.scripts]
+llm-obs = "llm_observability.cli:main"
+
+[project.urls]
+Repository = "https://github.com/derekgallardo01/llm-observability-kit"
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,0 +1,47 @@
+{
+  "description": "Golden eval cases against the bundled production-1hour.jsonl fixture. The fixture is generated from a fixed RNG seed so totals + per-feature counts are exact. These cases catch regressions in the aggregation math, the alert engine, and the percentile calculations.",
+  "cases": [
+    {
+      "id": "fixture-contains-all-three-features",
+      "fixture": "production-1hour.jsonl",
+      "type": "aggregate",
+      "assertions": [
+        {"path": "by_feature.customer_complaint_classifier.count", "op": ">=", "value": 400},
+        {"path": "by_feature.policy_summarizer.count", "op": ">=", "value": 80},
+        {"path": "by_feature.research_agent.count", "op": ">=", "value": 10}
+      ]
+    },
+    {
+      "id": "research-agent-is-the-cost-leader",
+      "fixture": "production-1hour.jsonl",
+      "type": "aggregate",
+      "assertions": [
+        {"path": "by_feature.research_agent.cost", "op": ">=", "value": 3.0},
+        {"path": "by_feature.customer_complaint_classifier.cost", "op": "<=", "value": 0.05}
+      ]
+    },
+    {
+      "id": "opus-cost-spike-alert-fires-on-fixture",
+      "fixture": "production-1hour.jsonl",
+      "type": "alert",
+      "rule_name": "opus_cost_spike",
+      "expected_fired": true
+    },
+    {
+      "id": "error-rate-rule-does-not-fire-on-fixture",
+      "fixture": "production-1hour.jsonl",
+      "type": "alert",
+      "rule_name": "error_rate_spike_global",
+      "expected_fired": false
+    },
+    {
+      "id": "tenant-split-acme-larger-than-globex",
+      "fixture": "production-1hour.jsonl",
+      "type": "aggregate",
+      "assertions": [
+        {"path": "by_tenant.acme.count", "op": ">", "value": 300},
+        {"path": "by_tenant.globex.count", "op": ">", "value": 50}
+      ]
+    }
+  ]
+}

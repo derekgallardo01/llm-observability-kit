@@ -1,0 +1,12 @@
+{
+  "repo": "llm-observability-kit",
+  "title": "LLM Observability Kit",
+  "tagline": "Runtime observability for LLM calls. Wrap any LLM call with @trace; capture cost + latency + tokens + errors; aggregate per-feature/model/tenant; fire alerts when thresholds breach. Vendor-neutral (Claude/OpenAI/Azure/local).",
+  "kicker": "LLM Ops · Runtime Observability · Capability Demo",
+  "features": [
+    {"label": "Decorator", "value": "@trace"},
+    {"label": "Bundled fixture", "value": "646 synthetic traces"},
+    {"label": "Tests + Evals", "value": "31 pytest + 5 golden"}
+  ],
+  "theme": {"primary": "#064e3b", "accent": "#10b981"}
+}

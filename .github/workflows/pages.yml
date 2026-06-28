@@ -1,0 +1,232 @@
+name: Deploy live demo to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package
+        run: pip install --quiet -e .
+
+      - name: Generate the static demo report
+        run: |
+          mkdir -p site
+          python - <<'PY'
+          import html, json, sys
+          from dataclasses import asdict
+          from pathlib import Path
+          sys.path.insert(0, "src")
+          from llm_observability.aggregator import aggregate, window_stats
+          from llm_observability.alerts import check_alerts, default_rules
+          from llm_observability.tracer import load_traces
+
+          traces = load_traces("fixtures/production-1hour.jsonl")
+          agg = aggregate(traces)
+          windows = window_stats(traces, window_minutes=10)
+          fired = check_alerts(agg, default_rules())
+
+          # Pre-compute strings that would otherwise need backslash escapes in f-strings
+          alert_section = ""
+          if fired:
+              rows = ""
+              for a in fired:
+                  rows += (
+                      f"<tr><td class='alert-name'>{html.escape(a.rule_name)}</td>"
+                      f"<td>{html.escape(a.description)}</td>"
+                      f"<td class='actual'>{a.actual_value:.4f}</td>"
+                      f"<td>{a.op} {a.threshold}</td></tr>"
+                  )
+              alert_section = (
+                  "<div class='card alert-card'>"
+                  "<h2>Alerts fired (1)</h2>"
+                  "<div class='metric'>" + str(len(fired)) + " rule(s) fired</div>"
+                  "<table><thead><tr><th>Rule</th><th>Description</th><th>Actual</th><th>Threshold</th></tr></thead>"
+                  "<tbody>" + rows + "</tbody></table>"
+                  "</div>"
+              )
+          else:
+              alert_section = "<div class='card'><h2>Alerts</h2><div class='metric'>No alerts fired - all clear.</div></div>"
+
+          features_html = ""
+          for feature, data in sorted(agg["by_feature"].items()):
+              error_pct = (data['error_count'] / data['count'] * 100) if data['count'] else 0
+              features_html += (
+                  f"<tr><td><code>{html.escape(feature)}</code></td>"
+                  f"<td class='num'>{data['count']}</td>"
+                  f"<td class='num'>{data['p95_latency_ms']}ms</td>"
+                  f"<td class='num'>{data['error_count']} ({error_pct:.1f}%)</td>"
+                  f"<td class='cost'>${data['cost']:.4f}</td></tr>"
+              )
+
+          models_html = ""
+          for model, data in sorted(agg["by_model"].items(), key=lambda kv: -kv[1]["cost"]):
+              models_html += (
+                  f"<tr><td><code>{html.escape(model)}</code></td>"
+                  f"<td class='num'>{data['count']}</td>"
+                  f"<td class='cost'>${data['cost']:.4f}</td></tr>"
+              )
+
+          # Windows table - one row per (window, feature, model)
+          windows_html = ""
+          for w in windows:
+              windows_html += (
+                  f"<tr><td class='ts'>{html.escape(w.window_start[:19])}</td>"
+                  f"<td><code>{html.escape(w.feature)}</code></td>"
+                  f"<td class='num'>{w.count}</td>"
+                  f"<td class='num'>{w.p50_latency_ms}/{w.p95_latency_ms}/{w.p99_latency_ms}</td>"
+                  f"<td class='num'>{w.error_count}</td>"
+                  f"<td class='cost'>${w.total_cost_usd:.4f}</td></tr>"
+              )
+
+          page = f"""<!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>LLM observability kit - live demo</title>
+            <style>
+              :root {{
+                --primary: #064e3b; --accent: #10b981;
+                --bg: #ecfdf5; --border: #a7f3d0;
+                --ink: #022c22; --muted: #4d6660;
+                --alert: #b91c1c;
+              }}
+              * {{ box-sizing: border-box; }}
+              body {{
+                margin: 0; font-family: 'Segoe UI', system-ui, sans-serif;
+                background: var(--bg); color: var(--ink); line-height: 1.5;
+              }}
+              .hero {{
+                background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+                color: white; padding: 50px 24px 60px;
+              }}
+              .hero-inner {{ max-width: 1000px; margin: 0 auto; }}
+              .hero .kicker {{ font-size: 13px; letter-spacing: 2px; opacity: .75; text-transform: uppercase; }}
+              .hero h1 {{ font-size: 38px; margin: 10px 0 14px; line-height: 1.1; }}
+              .hero p {{ font-size: 17px; margin: 0; opacity: .92; max-width: 760px; }}
+              .container {{ max-width: 1000px; margin: -30px auto 60px; padding: 0 24px; }}
+              .summary-cards {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 0 0 18px; }}
+              .summary-card {{
+                background: white; border: 1px solid var(--border); border-radius: 10px;
+                padding: 16px 18px; text-align: center;
+              }}
+              .summary-card .label {{
+                font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
+                color: var(--muted); margin-bottom: 6px;
+              }}
+              .summary-card .value {{ font-size: 24px; font-weight: 700; color: var(--ink); }}
+              .summary-card .value.alert {{ color: var(--alert); }}
+              .card {{
+                background: white; border: 1px solid var(--border); border-radius: 12px;
+                padding: 22px 26px; margin: 16px 0;
+                box-shadow: 0 1px 3px rgba(6, 78, 59, .08);
+              }}
+              .card.alert-card {{ border-left: 4px solid var(--alert); }}
+              .card h2 {{ margin: 0 0 4px; font-size: 20px; color: var(--primary); }}
+              .metric {{ font-size: 13px; color: var(--muted); margin-bottom: 12px; }}
+              table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
+              th {{ text-align: left; color: var(--muted); padding: 7px 10px; border-bottom: 2px solid var(--border); text-transform: uppercase; font-size: 11px; letter-spacing: 1px; }}
+              td {{ padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }}
+              td code {{ background: #d1fae5; padding: 2px 6px; border-radius: 4px; color: var(--primary); font-weight: 600; }}
+              td.num {{ font-family: Consolas, monospace; }}
+              td.cost {{ font-family: Consolas, monospace; font-weight: 600; }}
+              td.ts {{ font-family: Consolas, monospace; font-size: 11px; color: var(--muted); }}
+              td.alert-name {{ font-weight: 700; color: var(--alert); }}
+              td.actual {{ font-family: Consolas, monospace; font-weight: 600; }}
+              .footer {{
+                margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--border);
+                color: var(--muted); font-size: 13px; text-align: center;
+              }}
+              .footer code {{ background: #d1fae5; padding: 2px 6px; border-radius: 4px; }}
+              a {{ color: var(--accent); }}
+            </style>
+          </head>
+          <body>
+            <div class="hero">
+              <div class="hero-inner">
+                <div class="kicker">LLM Ops &middot; Runtime Observability</div>
+                <h1>LLM observability kit - live demo</h1>
+                <p>A synthetic 1-hour production trace (646 calls across 3 features,
+                3 models, 2 tenants) - the aggregator computes p50/p95/p99 latency
+                + cost + error rate per feature/model/tenant, sliding-window stats
+                bucket by 10-min windows, and the default alert rules check for cost
+                spikes, latency regressions, and error spikes.</p>
+              </div>
+            </div>
+
+            <div class="container">
+              <div class="summary-cards">
+                <div class="summary-card"><div class="label">Total calls</div><div class="value">{agg['total_calls']}</div></div>
+                <div class="summary-card"><div class="label">Total cost (USD)</div><div class="value">${agg['total_cost_usd']:.4f}</div></div>
+                <div class="summary-card"><div class="label">Total errors</div><div class="value">{agg['total_errors']}</div></div>
+                <div class="summary-card"><div class="label">Alerts fired</div><div class="value{' alert' if fired else ''}">{len(fired)}</div></div>
+              </div>
+
+              {alert_section}
+
+              <div class="card">
+                <h2>Per feature</h2>
+                <table>
+                  <thead><tr><th>Feature</th><th>Calls</th><th>p95 latency</th><th>Errors</th><th>Cost</th></tr></thead>
+                  <tbody>{features_html}</tbody>
+                </table>
+              </div>
+
+              <div class="card">
+                <h2>Per model</h2>
+                <table>
+                  <thead><tr><th>Model</th><th>Calls</th><th>Cost</th></tr></thead>
+                  <tbody>{models_html}</tbody>
+                </table>
+              </div>
+
+              <div class="card">
+                <h2>Sliding window stats (10-min buckets)</h2>
+                <div class="metric">p50/p95/p99 latency per (window, feature)</div>
+                <table>
+                  <thead><tr><th>Window start</th><th>Feature</th><th>Calls</th><th>p50/p95/p99 (ms)</th><th>Errors</th><th>Cost</th></tr></thead>
+                  <tbody>{windows_html}</tbody>
+                </table>
+              </div>
+
+              <div class="footer">
+                Regenerated on every push from the bundled fixture.
+                Install: <code>pip install -e .</code> then <code>llm-obs demo</code>.<br>
+                Source: <a href="https://github.com/derekgallardo01/llm-observability-kit">github.com/derekgallardo01/llm-observability-kit</a>
+              </div>
+            </div>
+          </body>
+          </html>
+          """
+          with open("site/index.html", "w", encoding="utf-8") as fh:
+              fh.write(page)
+          print("wrote site/index.html")
+          PY
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
